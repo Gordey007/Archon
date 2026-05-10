@@ -3,3 +3,9 @@ worktree:
 
 docs:
   path: packages/docs-web/src/content/docs
+
+assistant: pi
+
+assistants:
+  pi:
+    model: openrouter/deepseek/deepseek-v3.2

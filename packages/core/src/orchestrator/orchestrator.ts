@@ -276,6 +276,8 @@ export async function dispatchBackgroundWorkflow(
 
   // 3. Resolve isolation for this worker (each background workflow gets its own worktree).
   // Isolation failure is fatal — never run a workflow in a shared/parent worktree.
+  // However, workflows with `worktree.enabled: false` opt out of isolation entirely
+  // and run in the live checkout — mirror the same short-circuit as orchestrator-agent.
   let workerCwd: string;
   if (ctx.codebaseId) {
     const codebase = await getCodebase(ctx.codebaseId);
@@ -284,14 +286,22 @@ export async function dispatchBackgroundWorkflow(
         `Cannot dispatch workflow "${workflow.name}": codebase ${ctx.codebaseId} not found`
       );
     }
-    const result = await validateAndResolveIsolation(
-      workerConv,
-      codebase,
-      ctx.platform,
-      workerPlatformId,
-      { workflowType: 'thread', workflowId: workerPlatformId }
-    );
-    workerCwd = result.cwd;
+    if (workflow.worktree?.enabled === false) {
+      getLog().info(
+        { workflowName: workflow.name, conversationId: workerPlatformId, codebaseId: codebase.id },
+        'workflow.worktree_disabled_by_policy'
+      );
+      workerCwd = codebase.default_cwd;
+    } else {
+      const result = await validateAndResolveIsolation(
+        workerConv,
+        codebase,
+        ctx.platform,
+        workerPlatformId,
+        { workflowType: 'thread', workflowId: workerPlatformId }
+      );
+      workerCwd = result.cwd;
+    }
     await db.updateConversation(workerConv.id, { cwd: workerCwd }).catch((e: unknown) => {
       getLog().warn(
         { err: toError(e), workerPlatformId },

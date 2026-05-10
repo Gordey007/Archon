@@ -5,6 +5,8 @@ import {
   AsyncQueue,
   bridgeSession,
   buildResultChunk,
+  extractAssistantText,
+  extractTerminalAssistantText,
   mapPiEvent,
   serializeToolResult,
   tryParseStructuredOutput,
@@ -140,6 +142,40 @@ describe('usageToTokens', () => {
 });
 
 // ─── buildResultChunk ──────────────────────────────────────────────────────
+
+describe('assistant transcript extraction', () => {
+  test('extractAssistantText returns concatenated text blocks only', () => {
+    expect(
+      extractAssistantText({
+        role: 'assistant',
+        usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { total: 0 } },
+        content: [
+          { type: 'text', text: 'Plan saved. ' },
+          { type: 'tool_use', name: 'write' },
+          { type: 'text', text: 'Ready for next step.' },
+        ],
+      })
+    ).toBe('Plan saved. Ready for next step.');
+  });
+
+  test('extractTerminalAssistantText uses the last assistant message', () => {
+    expect(
+      extractTerminalAssistantText([
+        { role: 'user', content: [] },
+        {
+          role: 'assistant',
+          usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { total: 0 } },
+          content: [{ type: 'text', text: 'older' }],
+        },
+        {
+          role: 'assistant',
+          usage: { input: 2, output: 3, cacheRead: 0, cacheWrite: 0, totalTokens: 5, cost: { total: 0 } },
+          content: [{ type: 'text', text: 'final transcript' }],
+        },
+      ])
+    ).toBe('final transcript');
+  });
+});
 
 describe('buildResultChunk', () => {
   const usage = {
@@ -617,4 +653,52 @@ describe('bridgeSession cleanup', () => {
     // Yield to let the microtask queue drain so the .catch() runs.
     await new Promise(resolve => setTimeout(resolve, 10));
   }, 5_000);
+});
+
+describe('bridgeSession transcript fallback', () => {
+  test('emits assistant chunk from agent_end transcript when no text_delta arrived', async () => {
+    let listenerRef: ((e: AgentSessionEvent) => void) | undefined;
+
+    const mockSession = {
+      sessionId: 'test-session-id',
+      prompt: async () => {
+        listenerRef?.({
+          type: 'agent_end',
+          messages: [
+            {
+              role: 'assistant',
+              usage: {
+                input: 2,
+                output: 4,
+                cacheRead: 0,
+                cacheWrite: 0,
+                totalTokens: 6,
+                cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+              },
+              stopReason: 'stop',
+              content: [{ type: 'text', text: 'Final summary from transcript.' }],
+            },
+          ],
+        } as unknown as AgentSessionEvent);
+      },
+      dispose: () => {},
+      subscribe: (l: (e: AgentSessionEvent) => void) => {
+        listenerRef = l;
+        return () => {
+          listenerRef = undefined;
+        };
+      },
+      abort: async () => {},
+    } as unknown as AgentSession;
+
+    const chunks: unknown[] = [];
+    for await (const chunk of bridgeSession(mockSession, 'test prompt')) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks).toEqual([
+      { type: 'assistant', content: 'Final summary from transcript.' },
+      expect.objectContaining({ type: 'result', stopReason: 'stop', sessionId: 'test-session-id' }),
+    ]);
+  });
 });

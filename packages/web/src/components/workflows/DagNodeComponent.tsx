@@ -5,9 +5,9 @@ import type { DagNode } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 export interface DagNodeData extends DagNode {
-  /** For command nodes: the command name. For prompt nodes: display label ("Prompt"). For bash: display label ("Shell"). */
+  /** For command nodes: the command name. For prompt/approval/bash: display label. */
   label: string;
-  nodeType: 'command' | 'prompt' | 'bash';
+  nodeType: 'command' | 'prompt' | 'bash' | 'approval';
   promptText?: string;
   bashScript?: string;
   bashTimeout?: number;
@@ -36,6 +36,12 @@ const TYPE_CONFIG = {
     badgeBg: 'bg-node-bash/20',
     badgeText: 'text-node-bash',
   },
+  approval: {
+    badge: 'GATE',
+    stripeColor: 'bg-node-approval',
+    badgeBg: 'bg-node-approval/20',
+    badgeText: 'text-node-approval',
+  },
 } as const;
 
 function getContentPreview(data: DagNodeData): string {
@@ -46,6 +52,8 @@ function getContentPreview(data: DagNodeData): string {
       return data.promptText?.split('\n')[0] ?? '';
     case 'bash':
       return data.bashScript?.split('\n')[0] ?? '';
+    case 'approval':
+      return data.approval?.message?.split('\n')[0] ?? '';
   }
 }
 

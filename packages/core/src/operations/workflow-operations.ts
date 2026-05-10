@@ -148,6 +148,10 @@ export async function approveWorkflow(
 
   const approvalComment = comment ?? 'Approved';
 
+  if (run.metadata.approval_response === 'approved') {
+    throw new Error('Workflow run is already approved and waiting to resume.');
+  }
+
   try {
     // Interactive loop gate — store user input in metadata for the next iteration.
     // Note: node_completed is NOT written here. The executor writes it when the AI
@@ -160,13 +164,15 @@ export async function approveWorkflow(
         step_name: approval.nodeId,
         data: { decision: 'approved', comment: approvalComment, iteration: approval.iteration },
       });
-      // Transition to 'failed' so findResumableRun picks it up.
+      // Keep the run paused until the executor actually resumes it. This avoids
+      // showing a false failure state in the UI while still allowing resumable-run lookup.
       // IMPORTANT: metadata is MERGED (not replaced) — the approval context must survive
       // intact so the resumed executor can detect the correct startIteration.
       await workflowDb.updateWorkflowRun(runId, {
-        status: 'failed',
-        metadata: { loop_user_input: approvalComment },
+        status: 'paused',
+        metadata: { loop_user_input: approvalComment, approval_response: 'approved' },
       });
+      getLog().info({ runId, nodeId: approval.nodeId, type: approval.type }, 'operations.workflow_approve_recorded');
       return {
         workflowName: run.workflow_name,
         workingPath: run.working_path,
@@ -191,11 +197,13 @@ export async function approveWorkflow(
       step_name: approval.nodeId,
       data: { decision: 'approved', comment: approvalComment },
     });
-    // Transition to 'failed' so findResumableRun picks it up. Clear any rejection state.
+    // Keep the run paused until the executor actually resumes it. This avoids
+    // a misleading failed badge for a successfully approved gate.
     await workflowDb.updateWorkflowRun(runId, {
-      status: 'failed',
+      status: 'paused',
       metadata: { approval_response: 'approved', rejection_reason: '', rejection_count: 0 },
     });
+    getLog().info({ runId, nodeId: approval.nodeId, type: approval.type }, 'operations.workflow_approve_recorded');
   } catch (error) {
     const err = error as Error;
     getLog().error(

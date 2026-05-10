@@ -13,6 +13,7 @@ interface WorkflowRunGroupProps {
   onDelete?: (runId: string) => void;
   onApprove?: (runId: string) => void;
   onReject?: (runId: string, reason?: string) => void;
+  approvalActions?: Record<string, 'approving' | 'rejecting'>;
 }
 
 export function WorkflowRunGroup({
@@ -25,6 +26,7 @@ export function WorkflowRunGroup({
   onDelete,
   onApprove,
   onReject,
+  approvalActions,
 }: WorkflowRunGroupProps): React.ReactElement {
   const navigate = useNavigate();
 
@@ -60,6 +62,7 @@ export function WorkflowRunGroup({
             onDelete={onDelete}
             onApprove={onApprove}
             onReject={onReject}
+            approvalAction={approvalActions?.[run.id]}
           />
         ))}
       </div>

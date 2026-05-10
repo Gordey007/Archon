@@ -33,6 +33,7 @@ interface WorkflowRunCardProps {
   onDelete?: (runId: string) => void;
   onApprove?: (runId: string) => void;
   onReject?: (runId: string, reason?: string) => void;
+  approvalAction?: 'approving' | 'rejecting';
 }
 
 const PLATFORM_ICONS: Record<string, React.ReactElement> = {
@@ -143,6 +144,7 @@ export function WorkflowRunCard({
   onDelete,
   onApprove,
   onReject,
+  approvalAction,
 }: WorkflowRunCardProps): React.ReactElement {
   const navigate = useNavigate();
   const [elapsed, setElapsed] = useState(() => formatDuration(run.started_at, run.completed_at));
@@ -168,6 +170,17 @@ export function WorkflowRunCard({
       ? run.user_message
       : run.user_message.slice(0, 80) + '…'
     : null;
+  const approvalPending = approvalAction != null;
+  const approvalBannerMessage =
+    approvalAction === 'approving'
+      ? 'Approval recorded. Resuming workflow...'
+      : approvalAction === 'rejecting'
+        ? 'Rejection recorded. Updating workflow state...'
+        : (
+              run.metadata.approval as {
+                message?: string;
+              }
+            )?.message ?? 'Waiting for approval';
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4 space-y-3">
@@ -256,13 +269,7 @@ export function WorkflowRunCard({
       {run.status === 'paused' && run.metadata?.approval != null && (
         <div className="rounded-md bg-warning/5 border border-warning/20 px-3 py-2 flex items-start gap-2">
           <Pause className="h-4 w-4 text-warning shrink-0 mt-0.5" />
-          <p className="text-xs text-text-secondary">
-            {(
-              run.metadata.approval as {
-                message?: string;
-              }
-            )?.message ?? 'Waiting for approval'}
-          </p>
+          <p className="text-xs text-text-secondary">{approvalBannerMessage}</p>
         </div>
       )}
 
@@ -312,18 +319,22 @@ export function WorkflowRunCard({
               onClick={(): void => {
                 onApprove(run.id);
               }}
-              className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-success/80 hover:bg-success/10 hover:text-success transition-colors"
+              disabled={approvalPending}
+              className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-success/80 hover:bg-success/10 hover:text-success transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
               <CheckCircle className="h-3.5 w-3.5" />
-              Approve
+              {approvalAction === 'approving' ? 'Approving...' : 'Approve'}
             </button>
           )}
           {run.status === 'paused' && onReject && (
             <ConfirmRunActionDialog
               trigger={
-                <button className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-error/80 hover:bg-error/10 hover:text-error transition-colors">
+                <button
+                  disabled={approvalPending}
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-error/80 hover:bg-error/10 hover:text-error transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                >
                   <XCircle className="h-3.5 w-3.5" />
-                  Reject
+                  {approvalAction === 'rejecting' ? 'Rejecting...' : 'Reject'}
                 </button>
               }
               title="Reject workflow?"

@@ -268,6 +268,25 @@ export function DashboardPage(): React.ReactElement {
   );
 
   const [actionError, setActionError] = useState<string | null>(null);
+  const [approvalActions, setApprovalActions] = useState<Record<string, 'approving' | 'rejecting'>>(
+    {}
+  );
+
+  useEffect(() => {
+    setApprovalActions(prev => {
+      let changed = false;
+      const next: Record<string, 'approving' | 'rejecting'> = {};
+      for (const [runId, action] of Object.entries(prev)) {
+        const run = runs.find(candidate => candidate.id === runId);
+        if (run?.status === 'paused') {
+          next[runId] = action;
+        } else {
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [runs]);
 
   async function runAction(
     action: (runId: string) => Promise<unknown>,
@@ -291,18 +310,37 @@ export function DashboardPage(): React.ReactElement {
     runAction(abandonWorkflowRun, runId, 'Failed to abandon workflow');
   const handleDelete = (runId: string): Promise<void> =>
     runAction(deleteWorkflowRun, runId, 'Failed to delete workflow run');
-  const handleApprove = (runId: string): Promise<void> =>
-    runAction(approveWorkflowRun, runId, 'Failed to approve workflow');
+  async function handleApprove(runId: string): Promise<void> {
+    setApprovalActions(prev => ({ ...prev, [runId]: 'approving' }));
+    try {
+      setActionError(null);
+      await approveWorkflowRun(runId);
+      void queryClient.invalidateQueries({ queryKey: ['dashboardRuns'] });
+    } catch (err) {
+      setApprovalActions(prev => {
+        const next = { ...prev };
+        delete next[runId];
+        return next;
+      });
+      setActionError(err instanceof Error ? err.message : 'Failed to approve workflow');
+    }
+  }
   // Reject differs from the rest of the lifecycle actions because it takes a
   // second argument (the optional reason). Inline it rather than squeezing
   // through `runAction`'s `(id) => Promise` signature with a closure — keeps
   // `runAction` usefully narrow for the single-arg actions above.
   async function handleReject(runId: string, reason?: string): Promise<void> {
+    setApprovalActions(prev => ({ ...prev, [runId]: 'rejecting' }));
     try {
       setActionError(null);
       await rejectWorkflowRun(runId, reason);
       void queryClient.invalidateQueries({ queryKey: ['dashboardRuns'] });
     } catch (err) {
+      setApprovalActions(prev => {
+        const next = { ...prev };
+        delete next[runId];
+        return next;
+      });
       setActionError(err instanceof Error ? err.message : 'Failed to reject workflow');
     }
   }
@@ -381,6 +419,7 @@ export function DashboardPage(): React.ReactElement {
                           onDelete={handleDelete}
                           onApprove={handleApprove}
                           onReject={handleReject}
+                          approvalAction={approvalActions[run.id]}
                         />
                       ))}
                     </div>
@@ -398,6 +437,7 @@ export function DashboardPage(): React.ReactElement {
                       onDelete={handleDelete}
                       onApprove={handleApprove}
                       onReject={handleReject}
+                      approvalActions={approvalActions}
                     />
                   ))}
                 </div>

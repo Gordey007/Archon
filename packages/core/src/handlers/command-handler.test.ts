@@ -1803,8 +1803,8 @@ describe('CommandHandler', () => {
         expect(result.message).toContain('loop input received');
         expect(result.message).toContain('my-loop-wf');
         expect(mockUpdateWorkflowRun).toHaveBeenCalledWith('run-123', {
-          status: 'failed',
-          metadata: { loop_user_input: 'Add error handling' },
+          status: 'paused',
+          metadata: { loop_user_input: 'Add error handling', approval_response: 'approved' },
         });
       });
 
@@ -1893,6 +1893,11 @@ describe('CommandHandler', () => {
         updated_at: new Date(),
       };
 
+      const conversationWithCodebase: Conversation = {
+        ...baseConversation,
+        codebase_id: 'codebase-123',
+      };
+
       test('stores user comment as node_output when captureResponse is true', async () => {
         mockGetWorkflowRun.mockResolvedValueOnce({
           id: 'run-cap',
@@ -1955,6 +1960,56 @@ describe('CommandHandler', () => {
         );
         expect(nodeCompletedCall?.[0]).toMatchObject({
           data: { node_output: '', approval_decision: 'approved' },
+        });
+      });
+
+      test('returns workflow dispatch payload so approve resumes immediately', async () => {
+        mockGetCodebase.mockResolvedValueOnce({
+          id: 'codebase-123',
+          name: 'project-exemple',
+          repository_url: null,
+          default_cwd: '/repo',
+          ai_assistant_type: 'claude',
+          commands: {},
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+        mockGetWorkflowRun.mockResolvedValueOnce({
+          id: 'run-resume',
+          workflow_name: 'capture-wf',
+          conversation_id: 'conv-approve',
+          parent_conversation_id: 'conv-approve',
+          codebase_id: 'codebase-123',
+          status: 'paused',
+          user_message: 'build calculator',
+          metadata: {
+            approval: {
+              type: 'approval',
+              nodeId: 'review',
+              message: 'Approve?',
+              captureResponse: true,
+            },
+          },
+          started_at: new Date(),
+          completed_at: null,
+          last_activity_at: new Date(),
+          working_path: '/repo',
+        });
+        spyDiscoverWorkflows.mockResolvedValueOnce({
+          workflows: [makeTestWorkflowWithSource({ name: 'capture-wf' })],
+          errors: [],
+        });
+
+        const result = await handleCommand(
+          conversationWithCodebase,
+          '/workflow approve run-resume LGTM looks good'
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.message).toContain('Resuming workflow now.');
+        expect(result.workflow).toEqual({
+          definition: expect.objectContaining({ name: 'capture-wf' }),
+          args: 'build calculator',
         });
       });
     });

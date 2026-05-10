@@ -1251,6 +1251,10 @@ describe('POST /api/workflows/runs/:runId/approve', () => {
     expect(nodeCompletedCall?.[0]).toMatchObject({
       data: { node_output: '', approval_decision: 'approved' },
     });
+    expect(mockUpdateWorkflowRun).toHaveBeenCalledWith('run-paused-1', {
+      status: 'paused',
+      metadata: { approval_response: 'approved', rejection_reason: '', rejection_count: 0 },
+    });
   });
 });
 

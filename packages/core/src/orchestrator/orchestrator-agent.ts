@@ -627,12 +627,21 @@ export async function handleMessage(
           // and clear any rejection state.
           const metadataUpdate: Record<string, unknown> =
             approval.type === 'interactive_loop'
-              ? { loop_user_input: message }
+              ? { loop_user_input: message, approval_response: 'approved' }
               : { approval_response: 'approved', rejection_reason: '', rejection_count: 0 };
           await workflowDb.updateWorkflowRun(pausedRun.id, {
-            status: 'failed',
+            status: 'paused',
             metadata: metadataUpdate,
           });
+          getLog().info(
+            {
+              conversationId,
+              workflowRunId: pausedRun.id,
+              nodeId: approval.nodeId,
+              workflowName: pausedRun.workflow_name,
+            },
+            'orchestrator.natural_language_approval_recorded'
+          );
 
           // Discover workflow and resume
           const { workflows: discoveredWorkflows } = await discoverAllWorkflows(conversation);
@@ -657,6 +666,14 @@ export async function handleMessage(
             );
             return;
           }
+          getLog().info(
+            {
+              conversationId,
+              workflowRunId: pausedRun.id,
+              workflowName: pausedRun.workflow_name,
+            },
+            'orchestrator.natural_language_approval_auto_resume_start'
+          );
           await platform.sendMessage(conversationId, `▶️ Resuming **${workflow.name}**...`);
           await dispatchOrchestratorWorkflow(
             platform,

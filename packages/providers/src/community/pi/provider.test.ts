@@ -540,6 +540,41 @@ describe('PiProvider', () => {
     ]);
   });
 
+  test('falls back to final assistant transcript when agent_end has text but no text_delta events', async () => {
+    process.env.GEMINI_API_KEY = 'sk-test';
+    resetScript([
+      {
+        type: 'agent_end',
+        messages: [
+          {
+            role: 'assistant',
+            usage: {
+              input: 1,
+              output: 2,
+              cacheRead: 0,
+              cacheWrite: 0,
+              totalTokens: 3,
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+            },
+            stopReason: 'stop',
+            content: [{ type: 'text', text: 'Plan saved to artifacts.' }],
+          },
+        ],
+      },
+    ]);
+
+    const { chunks, error } = await consume(
+      new PiProvider().sendQuery('hi', '/tmp', undefined, {
+        model: 'google/gemini-2.5-pro',
+      })
+    );
+    expect(error).toBeUndefined();
+    expect(chunks).toEqual([
+      { type: 'assistant', content: 'Plan saved to artifacts.' },
+      expect.objectContaining({ type: 'result', stopReason: 'stop' }),
+    ]);
+  });
+
   test('yields tool + tool_result chunks for tool_execution events', async () => {
     process.env.GEMINI_API_KEY = 'sk-test';
     resetScript([

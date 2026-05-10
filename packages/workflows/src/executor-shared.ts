@@ -45,6 +45,7 @@ export const TRANSIENT_PATTERNS = [
   'econnrefused',
   'econnreset',
   'etimedout',
+  'connection lost',
   'rate limit',
   'too many requests',
   '429',

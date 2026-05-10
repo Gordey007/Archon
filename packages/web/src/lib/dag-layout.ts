@@ -45,7 +45,7 @@ export function layoutWithDagre(
 
 export function resolveNodeDisplay(dn: DagNode): {
   label: string;
-  nodeType: 'command' | 'prompt' | 'bash';
+  nodeType: 'command' | 'prompt' | 'bash' | 'approval';
   promptText?: string;
   bashScript?: string;
   bashTimeout?: number;
@@ -60,6 +60,12 @@ export function resolveNodeDisplay(dn: DagNode): {
   }
   if ('command' in dn && dn.command) {
     return { label: dn.command, nodeType: 'command' };
+  }
+  if ('approval' in dn && dn.approval) {
+    return {
+      label: 'Approval',
+      nodeType: 'approval',
+    };
   }
   return {
     label: 'Prompt',

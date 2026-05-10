@@ -22,9 +22,13 @@ import { QuickAddPicker } from './QuickAddPicker';
 
 export { dagNodesToReactFlow } from '@/lib/dag-layout';
 
-function resolveNodeLabel(nodeType: 'command' | 'prompt' | 'bash', commandName: string): string {
+function resolveNodeLabel(
+  nodeType: 'command' | 'prompt' | 'bash' | 'approval',
+  commandName: string
+): string {
   if (nodeType === 'command') return commandName;
   if (nodeType === 'bash') return 'Shell';
+  if (nodeType === 'approval') return 'Approval';
   return 'Prompt';
 }
 
@@ -37,6 +41,8 @@ export function reactFlowToDagNodes(rfNodes: DagFlowNode[], rfEdges: Edge[]): Da
       depends_on: deps.length > 0 ? deps : undefined,
       when: node.data.when || undefined,
       trigger_rule: node.data.trigger_rule || undefined,
+      idle_timeout: node.data.idle_timeout,
+      retry: node.data.retry,
     };
 
     if (node.data.nodeType === 'bash') {
@@ -65,6 +71,12 @@ export function reactFlowToDagNodes(rfNodes: DagFlowNode[], rfEdges: Edge[]): Da
     // DagNode uses `never` discriminant fields that can't be set on object literals
     if (node.data.nodeType === 'command') {
       return { ...aiBase, command: node.data.label } as DagNode;
+    }
+    if (node.data.nodeType === 'approval') {
+      return {
+        ...dagBase,
+        approval: node.data.approval ?? { message: '' },
+      } as DagNode;
     }
     const promptText = node.data.promptText;
     return {
@@ -158,7 +170,7 @@ export function WorkflowCanvas({
       const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
       const id = `node-${crypto.randomUUID()}`;
 
-      const nodeType = type as 'command' | 'prompt' | 'bash';
+      const nodeType = type as 'command' | 'prompt' | 'bash' | 'approval';
       const label = resolveNodeLabel(nodeType, command);
 
       const newNode: DagFlowNode = {
@@ -169,6 +181,7 @@ export function WorkflowCanvas({
           id,
           label,
           nodeType,
+          ...(nodeType === 'approval' ? { approval: { message: '' } } : {}),
         },
       };
 
@@ -267,7 +280,7 @@ export function WorkflowCanvas({
 
   const handleQuickAddNode = useCallback(
     (
-      type: 'command' | 'prompt' | 'bash',
+      type: 'command' | 'prompt' | 'bash' | 'approval',
       options?: { commandName?: string; skills?: string[]; mcp?: string }
     ) => {
       if (!quickAddPosition) return;
@@ -283,6 +296,7 @@ export function WorkflowCanvas({
           id,
           label,
           nodeType: type,
+          ...(type === 'approval' ? { approval: { message: '' } } : {}),
           ...(options?.skills && { skills: options.skills }),
           ...(options?.mcp && { mcp: options.mcp }),
         },

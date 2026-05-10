@@ -79,6 +79,22 @@ function serializeDagNode(node: DagNode, baseIndent: number): string {
   if ('bash' in node && node.bash) {
     lines.push(`${pad}  bash: ${serializeValue(node.bash, baseIndent + 2)}`);
   }
+  if ('approval' in node && node.approval) {
+    lines.push(`${pad}  approval:`);
+    lines.push(`${pad}    message: ${serializeValue(node.approval.message, baseIndent + 4)}`);
+    if (node.approval.capture_response !== undefined) {
+      lines.push(`${pad}    capture_response: ${node.approval.capture_response}`);
+    }
+    if (node.approval.on_reject) {
+      lines.push(`${pad}    on_reject:`);
+      lines.push(
+        `${pad}      prompt: ${serializeValue(node.approval.on_reject.prompt, baseIndent + 6)}`
+      );
+      if (node.approval.on_reject.max_attempts !== undefined) {
+        lines.push(`${pad}      max_attempts: ${node.approval.on_reject.max_attempts}`);
+      }
+    }
+  }
   if ('timeout' in node && node.timeout !== undefined) {
     lines.push(`${pad}  timeout: ${node.timeout}`);
   }

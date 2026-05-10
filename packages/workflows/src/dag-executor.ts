@@ -312,7 +312,7 @@ export function substituteNodeOutputRefs(
         if (Array.isArray(value) || typeof value === 'object') {
           return escapedForBash ? shellQuote(JSON.stringify(value)) : JSON.stringify(value);
         }
-        return escapedForBash ? "''" : ''; // undefined, symbol, bigint → empty (null is caught above by typeof check)
+        return escapedForBash ? "''" : ''; // null, undefined, symbol, bigint → empty
       } catch (jsonErr) {
         getLog().warn(
           { nodeId, field, outputPreview: nodeOutput.output.slice(0, 100), err: jsonErr as Error },

@@ -572,6 +572,10 @@ describe('classifyError', () => {
     expect(classifyError(new Error('rate limit: 429 too many requests'))).toBe('TRANSIENT');
   });
 
+  it('classifies network connection lost as TRANSIENT', () => {
+    expect(classifyError(new Error('Network connection lost.'))).toBe('TRANSIENT');
+  });
+
   it('classifies 529 as TRANSIENT', () => {
     expect(classifyError(new Error('HTTP 529 service overloaded'))).toBe('TRANSIENT');
   });

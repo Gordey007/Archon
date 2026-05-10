@@ -66,6 +66,28 @@ function getInstantIssues(
         suggestion: 'Enter a prompt for this node',
       });
     }
+    if (node.data.nodeType === 'approval' && !node.data.approval?.message?.trim()) {
+      issues.push({
+        severity: 'error',
+        message: `Node "${node.data.id}": approval message cannot be empty`,
+        nodeId: node.data.id,
+        field: 'approval.message',
+        suggestion: 'Enter a review message for this node',
+      });
+    }
+    if (
+      node.data.nodeType === 'approval' &&
+      node.data.approval?.on_reject &&
+      !node.data.approval.on_reject.prompt?.trim()
+    ) {
+      issues.push({
+        severity: 'error',
+        message: `Node "${node.data.id}": on_reject prompt cannot be empty`,
+        nodeId: node.data.id,
+        field: 'approval.on_reject.prompt',
+        suggestion: 'Enter a rejection-handling prompt or remove on_reject',
+      });
+    }
   }
 
   return issues;
@@ -140,6 +162,8 @@ function getDebouncedIssues(nodes: DagFlowNode[], edges: Edge[]): ValidationIssu
     const textsToScan: string[] = [];
     if (node.data.when) textsToScan.push(node.data.when);
     if (node.data.promptText) textsToScan.push(node.data.promptText);
+    if (node.data.approval?.message) textsToScan.push(node.data.approval.message);
+    if (node.data.approval?.on_reject?.prompt) textsToScan.push(node.data.approval.on_reject.prompt);
 
     for (const text of textsToScan) {
       const outputRefPattern = /\$(\w+)\.output/g;

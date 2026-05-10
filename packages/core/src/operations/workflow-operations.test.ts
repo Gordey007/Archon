@@ -93,9 +93,9 @@ describe('approveWorkflow', () => {
     const secondCall = mockCreateWorkflowEvent.mock.calls[1][0] as Record<string, unknown>;
     expect(secondCall.event_type).toBe('approval_received');
 
-    // Transitions to failed + clears rejection state
+    // Keeps the run paused until resume + clears rejection state
     expect(mockUpdateWorkflowRun).toHaveBeenCalledWith('run-1', {
-      status: 'failed',
+      status: 'paused',
       metadata: { approval_response: 'approved', rejection_reason: '', rejection_count: 0 },
     });
   });
@@ -124,8 +124,8 @@ describe('approveWorkflow', () => {
 
     // Stores loop_user_input in metadata
     expect(mockUpdateWorkflowRun).toHaveBeenCalledWith('run-1', {
-      status: 'failed',
-      metadata: { loop_user_input: 'fix the tests' },
+      status: 'paused',
+      metadata: { loop_user_input: 'fix the tests', approval_response: 'approved' },
     });
   });
 

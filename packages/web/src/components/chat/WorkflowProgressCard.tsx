@@ -21,6 +21,7 @@ export function WorkflowProgressCard({
   workerConversationId,
 }: WorkflowProgressCardProps): React.ReactElement {
   const navigate = useNavigate();
+  const [approvalAction, setApprovalAction] = useState<'approving' | 'rejecting' | null>(null);
 
   // REST polling for run data (stops when terminal)
   const {
@@ -95,6 +96,12 @@ export function WorkflowProgressCard({
   // Completed duration from live state
   const completedAt = liveState?.completedAt;
   const finalDuration = completedAt && startedAt ? completedAt - startedAt : null;
+
+  useEffect(() => {
+    if (status !== 'paused') {
+      setApprovalAction(null);
+    }
+  }, [status]);
 
   const handleHeaderClick = (): void => {
     userToggled.current = true;
@@ -207,28 +214,47 @@ export function WorkflowProgressCard({
               <div className="rounded-md bg-warning/5 border border-warning/20 px-3 py-2 flex items-start gap-2">
                 <Pause className="h-3.5 w-3.5 text-warning shrink-0 mt-0.5" />
                 <p className="text-xs text-text-secondary">
-                  {approval?.message ?? 'Waiting for approval'}
+                  {approvalAction === 'approving'
+                    ? 'Approval recorded. Resuming workflow...'
+                    : approvalAction === 'rejecting'
+                      ? 'Rejection recorded. Updating workflow state...'
+                      : approval?.message ?? 'Waiting for approval'}
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
-                    approveMutation.mutate();
+                    setApprovalAction('approving');
+                    approveMutation.mutate(undefined, {
+                      onError: () => {
+                        setApprovalAction(null);
+                      },
+                    });
                   }}
-                  disabled={!runId || approveMutation.isPending || rejectMutation.isPending}
+                  disabled={
+                    !runId ||
+                    approvalAction !== null ||
+                    approveMutation.isPending ||
+                    rejectMutation.isPending
+                  }
                   className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-success/80 hover:bg-success/10 hover:text-success transition-colors disabled:opacity-50"
                 >
                   <CheckCircle className="h-3.5 w-3.5" />
-                  Approve
+                  {approvalAction === 'approving' ? 'Approving...' : 'Approve'}
                 </button>
                 <ConfirmRunActionDialog
                   trigger={
                     <button
-                      disabled={!runId || approveMutation.isPending || rejectMutation.isPending}
+                      disabled={
+                        !runId ||
+                        approvalAction !== null ||
+                        approveMutation.isPending ||
+                        rejectMutation.isPending
+                      }
                       className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-error/80 hover:bg-error/10 hover:text-error transition-colors disabled:opacity-50"
                     >
                       <XCircle className="h-3.5 w-3.5" />
-                      Reject
+                      {approvalAction === 'rejecting' ? 'Rejecting...' : 'Reject'}
                     </button>
                   }
                   title="Reject workflow?"
@@ -245,7 +271,12 @@ export function WorkflowProgressCard({
                     placeholder: 'Why are you rejecting? Visible to the on_reject prompt.',
                   }}
                   onConfirm={(reason): void => {
-                    rejectMutation.mutate(reason);
+                    setApprovalAction('rejecting');
+                    rejectMutation.mutate(reason, {
+                      onError: () => {
+                        setApprovalAction(null);
+                      },
+                    });
                   }}
                 />
               </div>

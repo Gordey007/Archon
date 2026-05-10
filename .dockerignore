@@ -10,6 +10,8 @@ node_modules
 
 # Legacy workspace directory (not part of the app)
 workspace
+# Archon workspaces (may contain symlinks/junctions that break Docker build)
+.archon/workspaces
 
 # Build artifacts
 dist

@@ -124,6 +124,37 @@ function isAssistantMessage(m: unknown): m is AssistantMessage {
 }
 
 /**
+ * Extract plain text from Pi assistant content blocks.
+ *
+ * Pi's final transcript can carry assistant text in `agent_end.messages[*].content`
+ * even when no `message_update.text_delta` events were emitted. We only consume
+ * `type: 'text'` blocks here: other block kinds (tool calls, thinking, images)
+ * are either surfaced elsewhere or intentionally ignored for DAG node output.
+ */
+export function extractAssistantText(message: unknown): string {
+  if (!isAssistantMessage(message)) return '';
+  const { content } = message as { content?: unknown };
+  if (!Array.isArray(content)) return '';
+  return content
+    .map(part => {
+      if (part === null || typeof part !== 'object') return '';
+      const block = part as { type?: unknown; text?: unknown };
+      return block.type === 'text' && typeof block.text === 'string' ? block.text : '';
+    })
+    .join('');
+}
+
+/**
+ * Pull the final assistant transcript text from the last assistant message in
+ * an `agent_end` event. Used as a fallback when a provider closes cleanly
+ * without emitting `message_update.text_delta` chunks.
+ */
+export function extractTerminalAssistantText(messages: readonly unknown[]): string {
+  const last = [...messages].reverse().find(isAssistantMessage);
+  return last ? extractAssistantText(last) : '';
+}
+
+/**
  * Build the terminal `result` chunk from the final `agent_end` event. Pulls
  * usage/stopReason/error from the last assistant message in the returned
  * transcript. When the agent ended in error, surfaces it as `isError: true`.
@@ -279,6 +310,12 @@ export function mapPiEvent(event: AgentSessionEvent): MessageChunk[] {
   }
 }
 
+function isAgentEndWithMessages(
+  event: AgentSessionEvent
+): event is Extract<AgentSessionEvent, { type: 'agent_end'; messages: readonly unknown[] }> {
+  return event.type === 'agent_end';
+}
+
 /**
  * Internal queue payload for `bridgeSession`. Exported at module scope
  * (not inside the generator) so unit tests can exercise each variant
@@ -324,6 +361,13 @@ export async function* bridgeSession(
 
   const unsubscribe = session.subscribe((event: AgentSessionEvent) => {
     try {
+      if (isAgentEndWithMessages(event) && assistantBuffer.length === 0) {
+        const terminalAssistantText = extractTerminalAssistantText(event.messages);
+        if (terminalAssistantText.length > 0) {
+          assistantBuffer = terminalAssistantText;
+          queue.push({ kind: 'chunk', chunk: { type: 'assistant', content: terminalAssistantText } });
+        }
+      }
       for (const chunk of mapPiEvent(event)) {
         if (wantsStructured && chunk.type === 'assistant') {
           assistantBuffer += chunk.content;

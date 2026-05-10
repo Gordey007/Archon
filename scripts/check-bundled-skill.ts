@@ -31,11 +31,7 @@ function listSkillFiles(dir: string, base: string = dir): string[] {
   });
 }
 
-// Normalize to forward slashes so the substring check works on Windows
-// (path.relative() uses backslashes on Windows, but bundled-skill.ts uses forward slashes)
-const skillFiles = listSkillFiles(SKILL_ROOT)
-  .map(f => f.replace(/\\/g, '/'))
-  .sort();
+const skillFiles = listSkillFiles(SKILL_ROOT).sort();
 const bundledSrc = readFileSync(BUNDLED_SKILL_PATH, 'utf-8');
 // NOTE: This is a substring check — a filename that appears in a comment or
 // stale string literal will also pass. It's a safety net against missing imports,

@@ -221,14 +221,29 @@ function GeneralTab({
               updates.promptText = undefined;
               updates.bashScript = undefined;
               updates.bashTimeout = undefined;
+              updates.approval = undefined;
               updates.label = '';
             } else if (newType === 'prompt') {
               updates.bashScript = undefined;
               updates.bashTimeout = undefined;
+              updates.approval = undefined;
               updates.label = 'Prompt';
             } else if (newType === 'bash') {
               updates.promptText = undefined;
+              updates.approval = undefined;
               updates.label = 'Shell';
+              updates.allowed_tools = undefined;
+              updates.denied_tools = undefined;
+              updates.output_format = undefined;
+              updates.hooks = undefined;
+              updates.mcp = undefined;
+              updates.skills = undefined;
+            } else if (newType === 'approval') {
+              updates.promptText = undefined;
+              updates.bashScript = undefined;
+              updates.bashTimeout = undefined;
+              updates.approval = node.approval ?? { message: '' };
+              updates.label = 'Approval';
               updates.allowed_tools = undefined;
               updates.denied_tools = undefined;
               updates.output_format = undefined;
@@ -243,6 +258,7 @@ function GeneralTab({
           <option value="command">Command</option>
           <option value="prompt">Prompt</option>
           <option value="bash">Bash</option>
+          <option value="approval">Approval</option>
         </select>
       </Field>
 
@@ -308,6 +324,107 @@ function GeneralTab({
         </>
       )}
 
+      {node.nodeType === 'approval' && (
+        <>
+          <Field label="Approval Message">
+            <textarea
+              value={node.approval?.message ?? ''}
+              onChange={(e): void => {
+                onUpdate({
+                  approval: {
+                    ...(node.approval ?? {}),
+                    message: e.target.value,
+                  },
+                });
+              }}
+              rows={5}
+              placeholder="Review the previous output and approve to continue."
+              className={cn(textareaClass, 'min-h-[120px]')}
+            />
+          </Field>
+
+          <Field label="Capture Response">
+            <label className="flex items-center gap-2 text-xs text-text-primary">
+              <input
+                type="checkbox"
+                checked={node.approval?.capture_response ?? false}
+                onChange={(e): void => {
+                  onUpdate({
+                    approval: {
+                      ...(node.approval ?? { message: '' }),
+                      ...(e.target.checked ? { capture_response: true } : { capture_response: undefined }),
+                    },
+                  });
+                }}
+                className="rounded border-border"
+              />
+              Store reviewer response in node output
+            </label>
+          </Field>
+
+          <Field label="On Reject Prompt">
+            <textarea
+              value={node.approval?.on_reject?.prompt ?? ''}
+              onChange={(e): void => {
+                const prompt = e.target.value;
+                onUpdate({
+                  approval: {
+                    ...(node.approval ?? { message: '' }),
+                    ...(prompt.trim()
+                      ? {
+                          on_reject: {
+                            ...(node.approval?.on_reject ?? {}),
+                            prompt,
+                          },
+                        }
+                      : {
+                          on_reject:
+                            node.approval?.on_reject?.max_attempts !== undefined
+                              ? {
+                                  ...node.approval.on_reject,
+                                  prompt: '',
+                                }
+                              : undefined,
+                        }),
+                  },
+                });
+              }}
+              rows={5}
+              placeholder="Reviewer feedback: $REJECTION_REASON"
+              className={cn(textareaClass, 'min-h-[120px]')}
+            />
+          </Field>
+
+          <Field label="Reject Max Attempts">
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={node.approval?.on_reject?.max_attempts ?? ''}
+              onChange={(e): void => {
+                const raw = e.target.value;
+                const currentPrompt = node.approval?.on_reject?.prompt ?? '';
+                onUpdate({
+                  approval: {
+                    ...(node.approval ?? { message: '' }),
+                    ...(raw || currentPrompt.trim()
+                      ? {
+                          on_reject: {
+                            prompt: currentPrompt,
+                            max_attempts: raw ? Number(raw) : undefined,
+                          },
+                        }
+                      : { on_reject: undefined }),
+                  },
+                });
+              }}
+              placeholder="3"
+              className={inputClass}
+            />
+          </Field>
+        </>
+      )}
+
       {/* Dependencies */}
       <Field label="Dependencies">
         <DependencyTags
@@ -341,11 +458,11 @@ function ExecutionTab({
   node: DagNodeData;
   onUpdate: (updates: Partial<DagNodeData>) => void;
 }): React.ReactElement {
-  const isBash = node.nodeType === 'bash';
+  const isBashOrApproval = node.nodeType === 'bash' || node.nodeType === 'approval';
 
   return (
     <div className="flex flex-col gap-3 p-3">
-      {!isBash && (
+      {!isBashOrApproval && (
         <>
           <ProviderField node={node} onUpdate={onUpdate} selectClass={selectClass} />
 
@@ -705,7 +822,7 @@ function DagInspector({
   onDelete,
   onClose,
 }: NodeInspectorProps): React.ReactElement {
-  const isBash = node.nodeType === 'bash';
+  const isBashOrApproval = node.nodeType === 'bash' || node.nodeType === 'approval';
 
   return (
     <div key={node.id} className="flex flex-col h-full border-l border-border bg-surface">
@@ -742,12 +859,12 @@ function DagInspector({
           <TabsTrigger value="execution" className="text-xs">
             Execution
           </TabsTrigger>
-          {!isBash && (
+          {!isBashOrApproval && (
             <TabsTrigger value="tools" className="text-xs">
               Tools
             </TabsTrigger>
           )}
-          {!isBash && (
+          {!isBashOrApproval && (
             <TabsTrigger value="advanced" className="text-xs">
               Advanced
             </TabsTrigger>
@@ -763,13 +880,13 @@ function DagInspector({
             <ExecutionTab node={node} onUpdate={onUpdate} />
           </TabsContent>
 
-          {!isBash && (
+          {!isBashOrApproval && (
             <TabsContent value="tools">
               <ToolsTab node={node} onUpdate={onUpdate} />
             </TabsContent>
           )}
 
-          {!isBash && (
+          {!isBashOrApproval && (
             <TabsContent value="advanced">
               <AdvancedTab key={node.id} node={node} onUpdate={onUpdate} />
             </TabsContent>

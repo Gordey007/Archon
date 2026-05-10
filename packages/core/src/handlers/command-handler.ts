@@ -739,11 +739,54 @@ async function handleWorkflowCommand(
       try {
         const result = await approveWorkflow(runId, comment);
         const pathInfo = result.workingPath ? `\nPath: \`${result.workingPath}\`` : '';
-        const msg =
+        const resumeCwd = result.workingPath ?? workflowCwd;
+        getLog().info(
+          { runId, workflowName: result.workflowName, resumeCwd, approvalType: result.type },
+          'cmd.workflow_approve_recorded'
+        );
+
+        try {
+          const discovered = await discoverWorkflowsWithConfig(resumeCwd, loadConfig);
+          const workflow = resolveWorkflowName(
+            result.workflowName,
+            discovered.workflows.map(ws => ws.workflow)
+          );
+
+          if (workflow) {
+            getLog().info(
+              { runId, workflowName: result.workflowName, resumeCwd },
+              'cmd.workflow_approve_auto_resume_start'
+            );
+            const resumeMsg =
+              result.type === 'interactive_loop'
+                ? `Workflow \`${result.workflowName}\` loop input received.${pathInfo}\nResuming workflow now.`
+                : `Workflow \`${result.workflowName}\` approved.${pathInfo}\nResuming workflow now.`;
+            return {
+              success: true,
+              message: resumeMsg,
+              workflow: {
+                definition: workflow,
+                args: result.userMessage,
+              },
+            };
+          }
+        } catch (error) {
+          getLog().warn(
+            {
+              err: error as Error,
+              runId,
+              workflowName: result.workflowName,
+              resumeCwd,
+            },
+            'cmd.workflow_approve_resume_prepare_failed'
+          );
+        }
+
+        const fallbackMsg =
           result.type === 'interactive_loop'
             ? `Workflow \`${result.workflowName}\` loop input received.${pathInfo}\nType your next message in this conversation to resume the workflow.`
             : `Workflow \`${result.workflowName}\` approved.${pathInfo}\nType your response in this conversation to resume the workflow.`;
-        return { success: true, message: msg };
+        return { success: true, message: fallbackMsg };
       } catch (error) {
         const err = error as Error;
         getLog().error({ err, runId }, 'cmd.workflow_approve_failed');

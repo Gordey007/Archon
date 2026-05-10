@@ -1949,6 +1949,9 @@ export function registerApiRoutes(
       if (run.status !== 'paused') {
         return apiError(c, 400, `Cannot approve workflow in '${run.status}' status`);
       }
+      if (run.metadata.approval_response === 'approved') {
+        return apiError(c, 400, 'Workflow run is already approved and waiting to resume');
+      }
       const body = (await c.req.json().catch(() => ({}))) as { comment?: string };
       const comment = body.comment ?? 'Approved';
       const approval = run.metadata.approval as ApprovalContext | undefined;
@@ -1977,12 +1980,13 @@ export function registerApiRoutes(
       // and clear any rejection state.
       const metadataUpdate =
         approval.type === 'interactive_loop'
-          ? { loop_user_input: comment }
+          ? { loop_user_input: comment, approval_response: 'approved' }
           : { approval_response: 'approved', rejection_reason: '', rejection_count: 0 };
       await workflowDb.updateWorkflowRun(runId, {
-        status: 'failed',
+        status: 'paused',
         metadata: metadataUpdate,
       });
+      getLog().info({ runId, workflowName: run.workflow_name }, 'api.workflow_run_approve_recorded');
 
       // Auto-resume: dispatch to the orchestrator so the workflow continues
       // without requiring the user to re-run the workflow command. Mirrors
@@ -1990,6 +1994,7 @@ export function registerApiRoutes(
       // `parent_conversation_id` on the run (set by orchestrator-agent for any
       // web-dispatched workflow — foreground, interactive, and background via
       // the pre-created run) and a web-platform parent (guarded in the helper).
+      getLog().info({ runId, workflowName: run.workflow_name }, 'api.workflow_run_approve_auto_resume_start');
       const autoResumed = await tryAutoResumeAfterGate(run, 'approve');
 
       return c.json({
